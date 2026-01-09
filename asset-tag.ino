@@ -1,4 +1,4 @@
-#include <gm02sp/gm02sp.h>
+#include <src/gm02sp.h>
 
 #define MODEM_RX 14
 #define MODEM_TX 48
@@ -9,9 +9,7 @@
 #define MODEM_BUFFER 128
 #define MODEM_BUFFER_THRESHOLD 122
 
-Modem modem;
-
-void modem_log(const char* message){
+void callback_modem_log(const char* message){
   // Serial.print(">");
   // char a = ' ';
   // size_t counter = 0;
@@ -26,41 +24,38 @@ void modem_log(const char* message){
   Serial.println(message);
 }
 
-void init_modem(){
-  Serial2.setRxBufferSize(MODEM_BUFFER * 2);
-  Serial2.begin(MODEM_BAUD, SERIAL_8N1, MODEM_RX, MODEM_TX);
-  Serial2.setPins(MODEM_RX, MODEM_TX, MODEM_CTS, MODEM_RTS);
-  Serial2.setHwFlowCtrlMode(UART_HW_FLOWCTRL_CTS_RTS, MODEM_BUFFER_THRESHOLD);
-
+void callback_modem_reset(){
   pinMode(MODEM_RESET, OUTPUT);
   digitalWrite(MODEM_RESET, LOW);
   delay(1000);
   digitalWrite(MODEM_RESET, HIGH);
-
-  modem.set_logger(modem_log);
-
-  while(!modem.is_ready()){
-    while(Serial2.available()){
-      modem.encode(Serial2.read());
-    }
-  }
-  delay(100);
 }
+
+GM02SP::Modem modem(&Serial2, callback_modem_reset);
 
 void setup() {
   Serial.begin(9600);
   while(!Serial);
 
   Serial.println("Initializing... ");
-  init_modem();
+
+  Serial2.setRxBufferSize(MODEM_BUFFER * 2);
+  Serial2.begin(MODEM_BAUD, SERIAL_8N1, MODEM_RX, MODEM_TX);
+  Serial2.setPins(MODEM_RX, MODEM_TX, MODEM_CTS, MODEM_RTS);
+  Serial2.setHwFlowCtrlMode(UART_HW_FLOWCTRL_CTS_RTS, MODEM_BUFFER_THRESHOLD);
+  
+  modem.set_timer(millis);
+  modem.set_logger(callback_modem_log);
+  if(!modem.reset(10000)){
+    Serial.println("Failed to initialize modem.");
+  }
+
   Serial.println("Done");
 }
 
 void loop() {
-  while(Serial2.available()){
-    modem.encode(Serial2.read());
-  }
-
+  modem.read_line(0);
+  
   while(Serial.available() > 0) {
     Serial2.write(Serial.read());
   }
